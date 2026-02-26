@@ -1,0 +1,42 @@
+site_name: mcp-otel-proxy
+site_description: Universal sidecar proxy adding OpenTelemetry observability to any MCP server
+site_url: https://isitobservable.github.io/mcp-otel-proxy
+repo_url: https://github.com/isitobservable/mcp-otel-proxy
+repo_name: isitobservable/mcp-otel-proxy
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Telemetry Reference: telemetry-reference.md
+  - Configuration: configuration.md
+  - Deployment: deployment.md
+  - Architecture: architecture.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list

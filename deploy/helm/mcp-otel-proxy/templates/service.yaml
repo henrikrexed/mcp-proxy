@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mcp-otel-proxy.fullname" . }}
+  labels:
+    {{- include "mcp-otel-proxy.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.proxy.port }}
+      targetPort: proxy
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "mcp-otel-proxy.selectorLabels" . | nindent 4 }}

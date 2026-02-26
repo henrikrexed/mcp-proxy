@@ -1,0 +1,18 @@
+apiVersion: v2
+name: mcp-otel-proxy
+description: A Helm chart for deploying MCP servers with the mcp-otel-proxy sidecar for OpenTelemetry observability
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/isitobservable/mcp-otel-proxy
+sources:
+  - https://github.com/isitobservable/mcp-otel-proxy
+maintainers:
+  - name: Henrik Rexed
+    url: https://github.com/hrexed
+keywords:
+  - mcp
+  - opentelemetry
+  - observability
+  - proxy
+  - sidecar

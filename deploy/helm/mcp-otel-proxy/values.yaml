@@ -1,0 +1,47 @@
+proxy:
+  image: ghcr.io/isitobservable/mcp-otel-proxy:latest
+  port: 8080
+  logLevel: info
+  contextPropagation: "true"
+  capturePayload: "false"
+  sessionTTL: "3600"
+
+mcpServer:
+  image: ""
+  port: 3000
+  command: []
+  args: []
+
+otel:
+  enabled: true
+  endpoint: "otel-collector.observability.svc.cluster.local:4317"
+  insecure: "true"
+  serviceName: "mcp-otel-proxy"
+  resourceAttributes: ""
+
+gateway:
+  enabled: false
+  name: ""
+  namespace: ""
+
+resources:
+  proxy:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  mcpServer:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: ""

@@ -80,3 +80,43 @@ spec:
     - name: mcp
       port: 8080
       targetPort: mcp
+---
+# Sympozium SkillPack: mcp-otel-proxy wrapping another MCP server
+# The proxy adds OpenTelemetry tracing to any MCP server via a second sidecar.
+# The agent connects to the proxy (port 8080), which forwards to the upstream MCP server (port 8081).
+apiVersion: sympozium.ai/v1alpha1
+kind: SkillPack
+metadata:
+  name: mcp-with-otel-proxy
+spec:
+  category: observability
+  version: "0.1.0"
+  skills:
+    - name: otel-traced-mcp
+      description: Use an MCP server with automatic OpenTelemetry tracing via mcp-otel-proxy
+      content: |
+        # MCP Server with OpenTelemetry Tracing
+
+        You have access to an MCP server via a tracing proxy at http://localhost:8080/mcp.
+        Use streamable-http transport. All MCP calls are automatically traced with OpenTelemetry.
+
+        The proxy is transparent — use the upstream MCP server tools as normal.
+        Traces, metrics, and logs are exported to your configured OTLP endpoint.
+  sidecar:
+    image: ghcr.io/henrikrexed/mcp-otel-proxy:0.0.1
+    command: ["/mcp-otel-proxy"]
+    env:
+      - name: UPSTREAM_URL
+        value: "http://localhost:8081"
+      - name: PROXY_PORT
+        value: "8080"
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: "otel-collector.observability.svc.cluster.local:4317"
+      - name: OTEL_EXPORTER_OTLP_INSECURE
+        value: "true"
+      - name: OTEL_SERVICE_NAME
+        value: "mcp-otel-proxy"
+    mountWorkspace: true
+    resources:
+      cpu: "100m"
+      memory: "64Mi"

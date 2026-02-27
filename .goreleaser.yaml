@@ -17,27 +17,27 @@ builds:
 
 dockers:
   - image_templates:
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-amd64"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-amd64"
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
     goarch: amd64
   - image_templates:
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-arm64"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-arm64"
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64"
     goarch: arm64
 
 docker_manifests:
-  - name_template: "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}"
+  - name_template: "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}"
     image_templates:
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-amd64"
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/isitobservable/mcp-otel-proxy:latest"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-amd64"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/henrikrexed/mcp-otel-proxy:latest"
     image_templates:
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-amd64"
-      - "ghcr.io/isitobservable/mcp-otel-proxy:{{ .Version }}-arm64"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-amd64"
+      - "ghcr.io/henrikrexed/mcp-otel-proxy:{{ .Version }}-arm64"
 
 archives:
   - format: tar.gz

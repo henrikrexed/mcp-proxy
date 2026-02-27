@@ -4,9 +4,9 @@ description: A Helm chart for deploying MCP servers with the mcp-otel-proxy side
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/isitobservable/mcp-otel-proxy
+home: https://github.com/henrikrexed/mcp-otel-proxy
 sources:
-  - https://github.com/isitobservable/mcp-otel-proxy
+  - https://github.com/henrikrexed/mcp-otel-proxy
 maintainers:
   - name: Henrik Rexed
     url: https://github.com/hrexed

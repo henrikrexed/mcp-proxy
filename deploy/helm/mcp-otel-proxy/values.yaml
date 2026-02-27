@@ -1,5 +1,5 @@
 proxy:
-  image: ghcr.io/isitobservable/mcp-otel-proxy:latest
+  image: ghcr.io/henrikrexed/mcp-otel-proxy:latest
   port: 8080
   logLevel: info
   contextPropagation: "true"

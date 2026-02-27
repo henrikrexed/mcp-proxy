@@ -16,7 +16,7 @@ docker run -d \
   -e OTEL_SERVICE_NAME=my-mcp-proxy \
   -e LOG_LEVEL=debug \
   -p 8080:8080 \
-  ghcr.io/isitobservable/mcp-otel-proxy:latest
+  ghcr.io/henrikrexed/mcp-otel-proxy:latest
 ```
 
 Point your MCP client at `http://localhost:8080` instead of the MCP server directly.
@@ -33,7 +33,7 @@ helm install my-mcp deploy/helm/mcp-otel-proxy \
 
 ## Option 3: Binary
 
-Download from [GitHub Releases](https://github.com/isitobservable/mcp-otel-proxy/releases):
+Download from [GitHub Releases](https://github.com/henrikrexed/mcp-otel-proxy/releases):
 
 ```bash
 export UPSTREAM_URL=http://localhost:3000

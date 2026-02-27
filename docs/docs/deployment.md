@@ -29,7 +29,7 @@ helm install my-mcp deploy/helm/mcp-otel-proxy \
 
 ### Values Reference
 
-See [values.yaml](https://github.com/isitobservable/mcp-otel-proxy/blob/main/deploy/helm/mcp-otel-proxy/values.yaml) for all available options.
+See [values.yaml](https://github.com/henrikrexed/mcp-otel-proxy/blob/main/deploy/helm/mcp-otel-proxy/values.yaml) for all available options.
 
 ## Docker Compose
 
@@ -41,7 +41,7 @@ services:
       - "3000:3000"
 
   mcp-otel-proxy:
-    image: ghcr.io/isitobservable/mcp-otel-proxy:latest
+    image: ghcr.io/henrikrexed/mcp-otel-proxy:latest
     environment:
       UPSTREAM_URL: http://mcp-server:3000
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
@@ -62,7 +62,7 @@ Point your MCP client at `http://localhost:8080`.
 
 ## Standalone Binary
 
-Download from [GitHub Releases](https://github.com/isitobservable/mcp-otel-proxy/releases).
+Download from [GitHub Releases](https://github.com/henrikrexed/mcp-otel-proxy/releases).
 
 ```bash
 export UPSTREAM_URL=http://localhost:3000

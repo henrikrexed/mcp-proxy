@@ -45,7 +45,7 @@ docker run -d \
   -e UPSTREAM_URL=http://localhost:3000 \
   -e OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317 \
   -p 8080:8080 \
-  ghcr.io/isitobservable/mcp-otel-proxy:latest
+  ghcr.io/henrikrexed/mcp-otel-proxy:latest
 ```
 
 Or with Helm:
@@ -65,9 +65,9 @@ helm install my-mcp deploy/helm/mcp-otel-proxy \
 - **Session tracking** — understands MCP initialize handshake
 - **Kubernetes-native** — Helm chart with sidecar pattern and Gateway API support
 
-## Part of isitobservable
+## Part of henrikrexed
 
-This project is part of the [isitobservable](https://github.com/isitobservable) ecosystem by Henrik Rexed, alongside:
+This project is part of the [henrikrexed](https://github.com/henrikrexed) ecosystem by Henrik Rexed, alongside:
 
-- [k8s-networking-mcp](https://github.com/isitobservable/k8s-networking-mcp)
-- [otel-collector-mcp](https://github.com/isitobservable/otel-collector-mcp)
+- [k8s-networking-mcp](https://github.com/henrikrexed/k8s-networking-mcp)
+- [otel-collector-mcp](https://github.com/henrikrexed/otel-collector-mcp)

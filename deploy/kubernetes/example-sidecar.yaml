@@ -1,0 +1,82 @@
+# Example: Adding mcp-otel-proxy as a sidecar to an MCP server deployment.
+# The proxy intercepts MCP traffic and emits OpenTelemetry traces/metrics/logs.
+#
+# In this example, clients connect to the proxy on port 8080,
+# which forwards to the upstream MCP server on port 8081.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-mcp-server
+  namespace: mcp-tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-mcp-server
+  template:
+    metadata:
+      labels:
+        app: my-mcp-server
+    spec:
+      containers:
+        # --- Your MCP server container ---
+        - name: mcp-server
+          image: ghcr.io/henrikrexed/otel-collector-mcp:0.0.1
+          ports:
+            - name: mcp-upstream
+              containerPort: 8081
+          env:
+            - name: PORT
+              value: "8081"
+            - name: CLUSTER_NAME
+              value: "my-cluster"
+
+        # --- mcp-otel-proxy sidecar ---
+        - name: mcp-otel-proxy
+          image: ghcr.io/henrikrexed/mcp-otel-proxy:0.0.1
+          ports:
+            - name: mcp
+              containerPort: 8080
+          env:
+            - name: UPSTREAM_URL
+              value: "http://localhost:8081"
+            - name: PROXY_PORT
+              value: "8080"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.observability.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_SERVICE_NAME
+              value: "my-mcp-server-proxy"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: CAPTURE_PAYLOAD
+              value: "false"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            initialDelaySeconds: 3
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+# Service exposes the proxy port (8080), not the upstream directly
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-mcp-server
+  namespace: mcp-tools
+spec:
+  type: ClusterIP
+  selector:
+    app: my-mcp-server
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp

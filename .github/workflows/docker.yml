@@ -49,3 +49,12 @@ jobs:
           format: table
           exit-code: '1'
           severity: CRITICAL,HIGH
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/henrikrexed/mcp-otel-proxy:${{ steps.version.outputs.VERSION }}
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH

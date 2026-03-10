@@ -416,21 +416,58 @@ func (h *Handler) doUpstreamStreamingRequest(ctx context.Context, w http.Respons
 	copyHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
-	// Stream SSE and buffer for telemetry
+	// Stream SSE and buffer for telemetry.
+	// SSE streams stay open, so we read with a timeout: once we see a blank line
+	// (SSE event boundary) after data lines, we stop reading.
 	flusher, canFlush := w.(http.Flusher)
 	var buf bytes.Buffer
 	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024) // up to 1MB lines
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		buf.Write(line)
-		buf.WriteByte(0x0a)
-		_, _ = w.Write(line)
-		_, _ = w.Write([]byte{0x0a})
-		if canFlush {
-			flusher.Flush()
+	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+
+	// Use a goroutine + channel to avoid blocking forever on scanner.Scan()
+	type scanResult struct {
+		line []byte
+		ok   bool
+	}
+	lineCh := make(chan scanResult, 1)
+	go func() {
+		for scanner.Scan() {
+			line := make([]byte, len(scanner.Bytes()))
+			copy(line, scanner.Bytes())
+			lineCh <- scanResult{line: line, ok: true}
+		}
+		lineCh <- scanResult{ok: false}
+	}()
+
+	sawData := false
+	idleTimeout := 5 * time.Second
+	for {
+		select {
+		case result := <-lineCh:
+			if !result.ok {
+				goto done
+			}
+			buf.Write(result.line)
+			buf.WriteByte(0x0a)
+			_, _ = w.Write(result.line)
+			_, _ = w.Write([]byte{0x0a})
+			if canFlush {
+				flusher.Flush()
+			}
+			if bytes.HasPrefix(result.line, []byte("data: ")) {
+				sawData = true
+			}
+			// Empty line after data = end of SSE event
+			if sawData && len(result.line) == 0 {
+				goto done
+			}
+		case <-time.After(idleTimeout):
+			goto done
+		case <-ctx.Done():
+			goto done
 		}
 	}
+done:
 
 	return buf.Bytes(), resp.Header, resp.StatusCode, scanner.Err()
 }

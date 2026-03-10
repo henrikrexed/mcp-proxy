@@ -148,7 +148,7 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 	if acceptsSSE {
 		// StreamableHTTP: stream SSE response directly to client while buffering for telemetry
 		var sseErr error
-		respBody, respHeaders, statusCode, sseErr = h.doUpstreamStreamingRequest(ctx, w, r, bodyToSend)
+		respBody, respHeaders, _, sseErr = h.doUpstreamStreamingRequest(ctx, w, r, bodyToSend)
 		upstreamDuration := time.Since(upstreamStart)
 		h.metrics.UpstreamLatency.Record(ctx, upstreamDuration.Seconds(), telemetry.MethodToolAttrs(reqInfo.Method, reqInfo.ToolName))
 		if sseErr != nil {
@@ -425,8 +425,8 @@ func (h *Handler) doUpstreamStreamingRequest(ctx context.Context, w http.Respons
 		line := scanner.Bytes()
 		buf.Write(line)
 		buf.WriteByte(0x0a)
-		w.Write(line)
-		w.Write([]byte{0x0a})
+		_, _ = w.Write(line)
+		_, _ = w.Write([]byte{0x0a})
 		if canFlush {
 			flusher.Flush()
 		}

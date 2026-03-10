@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -136,14 +138,59 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		}
 	}
 
-	// Forward to upstream
+	// Forward to upstream — use streaming for SSE-capable clients
 	upstreamStart := time.Now()
-	respBody, respHeaders, statusCode, err := h.doUpstreamRequest(ctx, r, bodyToSend)
+	acceptsSSE := strings.Contains(r.Header.Get("Accept"), "text/event-stream")
+	var respBody []byte
+	var respHeaders http.Header
+	var statusCode int
+
+	if acceptsSSE {
+		// StreamableHTTP: stream SSE response directly to client while buffering for telemetry
+		var sseErr error
+		respBody, respHeaders, statusCode, sseErr = h.doUpstreamStreamingRequest(ctx, w, r, bodyToSend)
+		upstreamDuration := time.Since(upstreamStart)
+		h.metrics.UpstreamLatency.Record(ctx, upstreamDuration.Seconds(), telemetry.MethodToolAttrs(reqInfo.Method, reqInfo.ToolName))
+		if sseErr != nil {
+			h.logger.ErrorContext(ctx, "upstream SSE stream error",
+				"error", sseErr,
+				"mcp.method.name", reqInfo.Method,
+			)
+		}
+		// Parse SSE data lines for telemetry
+		sseData := extractSSEData(respBody)
+		var respInfo *mcp.ResponseInfo
+		if sseData != nil {
+			respParsed, parseErr := jsonrpc.ParseResponse(sseData)
+			if parseErr == nil && len(respParsed.Responses) > 0 {
+				respInfo = mcp.ExtractResponseInfo(&respParsed.Responses[0], reqInfo.Method)
+				if reqInfo.Method == "initialize" && !respInfo.HasError {
+					respSessionID := sessionID
+					if respSessionID == "" {
+						respSessionID = respHeaders.Get("Mcp-Session-Id")
+					}
+					h.sessions.TrackInitialize(&respParsed.Responses[0], respSessionID)
+				}
+				if h.config.CapturePayload && reqInfo.Method == "tools/call" {
+					telemetry.SetPayloadAttributes(span, string(req.Params), string(respParsed.Responses[0].Result))
+				}
+			}
+		}
+		h.metrics.MessageSize.Record(ctx, int64(len(respBody)), telemetry.DirectionAttr("response"), telemetry.MethodAttr(reqInfo.Method))
+		duration := time.Since(start)
+		h.metrics.RequestDuration.Record(ctx, duration.Seconds(),
+			telemetry.MethodToolErrorAttrs(reqInfo.Method, reqInfo.ToolName, respInfo))
+		telemetry.EndMCPSpan(span, respInfo)
+		return
+	}
+
+	var upErr error
+	respBody, respHeaders, statusCode, upErr = h.doUpstreamRequest(ctx, r, bodyToSend)
 	upstreamDuration := time.Since(upstreamStart)
 
-	if err != nil {
+	if upErr != nil {
 		h.logger.ErrorContext(ctx, "upstream request failed",
-			"error", err,
+			"error", upErr,
 			"mcp.method.name", reqInfo.Method,
 			"upstream.url", h.config.UpstreamURL,
 		)
@@ -275,6 +322,14 @@ func (h *Handler) handleBatch(w http.ResponseWriter, r *http.Request, reqBody []
 }
 
 func (h *Handler) forwardRaw(w http.ResponseWriter, r *http.Request, reqBody []byte) {
+	// Use streaming for SSE-capable clients
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		_, _, _, err := h.doUpstreamStreamingRequest(r.Context(), w, r, reqBody)
+		if err != nil {
+			h.logger.ErrorContext(r.Context(), "failed to stream raw SSE response", "error", err)
+		}
+		return
+	}
 	respBody, respHeaders, statusCode, err := h.doUpstreamRequest(r.Context(), r, reqBody)
 	if err != nil {
 		http.Error(w, "upstream request failed", http.StatusBadGateway)
@@ -318,6 +373,66 @@ func (h *Handler) doUpstreamRequest(ctx context.Context, originalReq *http.Reque
 	}
 
 	return respBody, resp.Header, resp.StatusCode, nil
+}
+
+
+// extractSSEData extracts the last "data: " payload from SSE response bytes.
+func extractSSEData(sseBody []byte) []byte {
+	var lastData []byte
+	for _, line := range bytes.Split(sseBody, []byte{0x0a}) {
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			lastData = line[6:]
+		}
+	}
+	return lastData
+}
+// doUpstreamStreamingRequest sends the request upstream and streams SSE response directly to the client.
+// Returns the full buffered SSE data for telemetry parsing, plus the response headers.
+func (h *Handler) doUpstreamStreamingRequest(ctx context.Context, w http.ResponseWriter, originalReq *http.Request, body []byte) ([]byte, http.Header, int, error) {
+	upstreamURL := h.upstream.String() + originalReq.URL.Path
+	if originalReq.URL.RawQuery != "" {
+		upstreamURL += "?" + originalReq.URL.RawQuery
+	}
+
+	req, err := http.NewRequestWithContext(ctx, originalReq.Method, upstreamURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	for k, vv := range originalReq.Header {
+		for _, v := range vv {
+			req.Header.Add(k, v)
+		}
+	}
+	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Copy response headers to client
+	copyHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+
+	// Stream SSE and buffer for telemetry
+	flusher, canFlush := w.(http.Flusher)
+	var buf bytes.Buffer
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024) // up to 1MB lines
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		buf.Write(line)
+		buf.WriteByte(0x0a)
+		w.Write(line)
+		w.Write([]byte{0x0a})
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	return buf.Bytes(), resp.Header, resp.StatusCode, scanner.Err()
 }
 
 func copyHeaders(dst, src http.Header) {

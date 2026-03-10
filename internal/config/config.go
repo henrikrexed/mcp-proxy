@@ -17,6 +17,7 @@ type Config struct {
 	LogLevel           string
 	ContextPropagation bool
 	CapturePayload     bool
+	CompressResponses  bool
 	SessionTTLSeconds  int
 	ResourceAttributes string
 }
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		LogLevel:           strings.ToLower(envOrDefault("LOG_LEVEL", "info")),
 		ContextPropagation: envBoolOrDefault("CONTEXT_PROPAGATION", true),
 		CapturePayload:     envBoolOrDefault("CAPTURE_PAYLOAD", false),
+		CompressResponses:  envBoolOrDefault("COMPRESS_RESPONSES", false),
 		SessionTTLSeconds:  envIntOrDefault("SESSION_TTL", 3600),
 		ResourceAttributes: os.Getenv("OTEL_RESOURCE_ATTRIBUTES"),
 	}

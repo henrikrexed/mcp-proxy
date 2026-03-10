@@ -4,6 +4,7 @@ proxy:
   logLevel: info
   contextPropagation: "true"
   capturePayload: "false"
+  compressResponses: "false"
   sessionTTL: "3600"
 
 mcpServer:

@@ -14,6 +14,7 @@ All configuration is via environment variables. No config files needed.
 | `LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `CONTEXT_PROPAGATION` | No | `true` | Enable trace context propagation via params._meta |
 | `CAPTURE_PAYLOAD` | No | `false` | Capture tool call arguments and results in spans |
+| `COMPRESS_RESPONSES` | No | `false` | Convert JSON responses from upstream MCP servers to markdown tables (reduces token usage) |
 | `SESSION_TTL` | No | `3600` | Session eviction TTL in seconds |
 | `OTEL_RESOURCE_ATTRIBUTES` | No | — | Additional OTel resource attributes (key=value,key=value) |
 
@@ -57,6 +58,7 @@ proxy:
   logLevel: info
   contextPropagation: "true"
   capturePayload: "false"
+  compressResponses: "false"
   sessionTTL: "3600"
 
 otel:

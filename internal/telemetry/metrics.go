@@ -7,12 +7,13 @@ import (
 
 // Metrics holds all OTel metric instruments for the proxy.
 type Metrics struct {
-	RequestDuration metric.Float64Histogram
-	RequestCount    metric.Int64Counter
-	UpstreamLatency metric.Float64Histogram
-	MessageSize     metric.Int64Histogram
-	ErrorsTotal     metric.Int64Counter
-	ActiveSessions  metric.Int64UpDownCounter
+	RequestDuration  metric.Float64Histogram
+	RequestCount     metric.Int64Counter
+	UpstreamLatency  metric.Float64Histogram
+	MessageSize      metric.Int64Histogram
+	ErrorsTotal      metric.Int64Counter
+	ActiveSessions   metric.Int64UpDownCounter
+	CompressionRatio metric.Float64Histogram
 }
 
 // InitMetrics creates and registers all metric instruments.
@@ -80,12 +81,21 @@ func InitMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
+	compressionRatio, err := meter.Float64Histogram(
+		"mcp_proxy.response.compression_ratio",
+		metric.WithDescription("Ratio of compressed to original response size"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Metrics{
-		RequestDuration: requestDuration,
-		RequestCount:    requestCount,
-		UpstreamLatency: upstreamLatency,
-		MessageSize:     messageSize,
-		ErrorsTotal:     errorsTotal,
-		ActiveSessions:  activeSessions,
+		RequestDuration:  requestDuration,
+		RequestCount:     requestCount,
+		UpstreamLatency:  upstreamLatency,
+		MessageSize:      messageSize,
+		ErrorsTotal:      errorsTotal,
+		ActiveSessions:   activeSessions,
+		CompressionRatio: compressionRatio,
 	}, nil
 }

@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,7 +13,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/isitobservable/mcp-otel-proxy/internal/compress"
 	"github.com/isitobservable/mcp-otel-proxy/internal/config"
 	"github.com/isitobservable/mcp-otel-proxy/internal/jsonrpc"
 	"github.com/isitobservable/mcp-otel-proxy/internal/mcp"
@@ -174,6 +177,11 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		}
 	}
 
+	// Apply JSON→Markdown compression if enabled for tools/call responses
+	if h.config.CompressResponses && reqInfo.Method == "tools/call" && respInfo != nil && !respInfo.HasError {
+		respBody = h.compressResponse(ctx, span, respBody, respParsed)
+	}
+
 	// Record response metrics
 	totalDuration := time.Since(start)
 	h.metrics.RequestDuration.Record(ctx, totalDuration.Seconds(),
@@ -318,4 +326,106 @@ func copyHeaders(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
+}
+
+// compressResponse applies JSON→Markdown compression to MCP tool call response content blocks.
+// It modifies text content blocks in-place and returns the re-serialized response body.
+func (h *Handler) compressResponse(ctx context.Context, span trace.Span, respBody []byte, respParsed *jsonrpc.ParseResult) []byte {
+	if respParsed == nil || len(respParsed.Responses) == 0 {
+		return respBody
+	}
+
+	resp := &respParsed.Responses[0]
+	if len(resp.Result) == 0 {
+		return respBody
+	}
+
+	// Parse the result to find content blocks
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return respBody
+	}
+
+	contentRaw, ok := result["content"]
+	if !ok {
+		return respBody
+	}
+
+	var content []map[string]json.RawMessage
+	if err := json.Unmarshal(contentRaw, &content); err != nil {
+		return respBody
+	}
+
+	originalSize := len(respBody)
+	compressed := false
+
+	for i, block := range content {
+		typeRaw, ok := block["type"]
+		if !ok {
+			continue
+		}
+		var blockType string
+		if err := json.Unmarshal(typeRaw, &blockType); err != nil || blockType != "text" {
+			continue
+		}
+
+		textRaw, ok := block["text"]
+		if !ok {
+			continue
+		}
+		var text string
+		if err := json.Unmarshal(textRaw, &text); err != nil {
+			continue
+		}
+
+		converted, didConvert := compress.CompressJSONToMarkdown(text)
+		if didConvert {
+			newText, _ := json.Marshal(converted)
+			content[i]["text"] = newText
+			compressed = true
+		}
+	}
+
+	if !compressed {
+		return respBody
+	}
+
+	// Re-serialize the modified content back into the response
+	newContent, err := json.Marshal(content)
+	if err != nil {
+		return respBody
+	}
+	result["content"] = newContent
+
+	newResult, err := json.Marshal(result)
+	if err != nil {
+		return respBody
+	}
+	resp.Result = newResult
+
+	// Re-serialize the full JSON-RPC response
+	newRespBody, err := json.Marshal(resp)
+	if err != nil {
+		return respBody
+	}
+
+	// Set compression telemetry attributes
+	span.SetAttributes(
+		attribute.Bool("mcp.response.compressed", true),
+		attribute.Int("mcp.response.original_bytes", originalSize),
+		attribute.Int("mcp.response.compressed_bytes", len(newRespBody)),
+	)
+
+	// Record compression ratio metric
+	if originalSize > 0 {
+		ratio := float64(len(newRespBody)) / float64(originalSize)
+		h.metrics.CompressionRatio.Record(ctx, ratio)
+	}
+
+	h.logger.DebugContext(ctx, "compressed response",
+		"original_bytes", originalSize,
+		"compressed_bytes", len(newRespBody),
+	)
+
+	return newRespBody
 }

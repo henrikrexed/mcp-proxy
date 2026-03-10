@@ -59,6 +59,8 @@ spec:
               value: {{ .Values.proxy.contextPropagation | quote }}
             - name: CAPTURE_PAYLOAD
               value: {{ .Values.proxy.capturePayload | quote }}
+            - name: COMPRESS_RESPONSES
+              value: {{ .Values.proxy.compressResponses | quote }}
             - name: SESSION_TTL
               value: {{ .Values.proxy.sessionTTL | quote }}
           livenessProbe:

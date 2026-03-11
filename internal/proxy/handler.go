@@ -173,6 +173,7 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		}
 		// Parse SSE data lines for telemetry
 		sseData := extractSSEData(respBody)
+		h.logger.Info("SSE debug", "respBody.len", len(respBody), "sseData.nil", sseData == nil, "respHeaders.session", respHeaders.Get("Mcp-Session-Id"), "method", reqInfo.Method)
 		var respInfo *mcp.ResponseInfo
 		if sseData != nil {
 			respParsed, parseErr := jsonrpc.ParseResponse(sseData)

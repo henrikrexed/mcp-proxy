@@ -65,6 +65,13 @@ func New(cfg *config.Config, metrics *telemetry.Metrics, sessions *mcp.SessionSt
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("incoming request",
+		"method", r.Method,
+		"path", r.URL.Path,
+		"remote", r.RemoteAddr,
+		"accept", r.Header.Get("Accept"),
+		"content-type", r.Header.Get("Content-Type"),
+	)
 	start := time.Now()
 
 	// Read request body

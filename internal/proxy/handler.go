@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -173,7 +174,7 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		}
 		// Parse SSE data lines for telemetry
 		sseData := extractSSEData(respBody)
-		h.logger.Info("SSE debug", "respBody.len", len(respBody), "sseData.nil", sseData == nil, "respHeaders.session", respHeaders.Get("Mcp-Session-Id"), "method", reqInfo.Method)
+		h.logger.Info("SSE debug", "respBody.len", len(respBody), "respBody", string(respBody), "sseData.nil", sseData == nil, "sseData", string(sseData), "respHeaders.session", respHeaders.Get("Mcp-Session-Id"), "allHeaders", fmt.Sprintf("%v", respHeaders), "method", reqInfo.Method)
 		var respInfo *mcp.ResponseInfo
 		if sseData != nil {
 			respParsed, parseErr := jsonrpc.ParseResponse(sseData)

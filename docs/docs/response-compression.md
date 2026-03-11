@@ -104,3 +104,13 @@ Measured with real MCP servers:
 
 !!! tip
     Compression has the biggest impact on list/scan tools that return arrays. Detail tools (`get_service`, `get_gateway`) that return single objects are passed through unchanged.
+
+### Spans
+
+When compression is enabled, a dedicated child span is created under the `tools/call` span:
+
+| Span Name | Parent | Description |
+|---|---|---|
+| `mcp.response.compress` | `tools/call` | Compression operation with duration, original/compressed sizes |
+
+This lets you see compression latency separately in your trace waterfall (e.g., in Dynatrace or Jaeger).

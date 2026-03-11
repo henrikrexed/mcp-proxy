@@ -37,6 +37,7 @@ func main() {
 		logLevel = slog.LevelInfo
 	}
 
+	fmt.Fprintf(os.Stdout, "mcp-otel-proxy starting (pre-init) upstream=%s port=%s otel=%s\n", cfg.UpstreamURL, cfg.ProxyPort, cfg.OTELEndpoint)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -48,9 +49,11 @@ func main() {
 	}
 	defer providers.Shutdown(context.Background())
 
-	// Use OTel-bridged logger with level filter
-	logger := providers.Logger
-	slog.SetDefault(slog.New(newLevelHandler(logLevel, logger.Handler())))
+	// Use multi-writer logger: stdout + OTel OTLP
+	stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	otelHandler := newLevelHandler(logLevel, providers.Logger.Handler())
+	multiHandler := newMultiHandler(stdoutHandler, otelHandler)
+	slog.SetDefault(slog.New(multiHandler))
 
 	// Initialize metrics
 	metrics, err := telemetry.InitMetrics()
@@ -150,4 +153,47 @@ func (h *levelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (h *levelHandler) WithGroup(name string) slog.Handler {
 	return &levelHandler{level: h.level, handler: h.handler.WithGroup(name)}
+}
+
+// multiHandler fans out log records to multiple handlers
+type multiHandler struct {
+	handlers []slog.Handler
+}
+
+func newMultiHandler(handlers ...slog.Handler) *multiHandler {
+	return &multiHandler{handlers: handlers}
+}
+
+func (h *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, handler := range h.handlers {
+		if handler.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	for _, handler := range h.handlers {
+		if handler.Enabled(ctx, r.Level) {
+			_ = handler.Handle(ctx, r)
+		}
+	}
+	return nil
+}
+
+func (h *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	handlers := make([]slog.Handler, len(h.handlers))
+	for i, handler := range h.handlers {
+		handlers[i] = handler.WithAttrs(attrs)
+	}
+	return &multiHandler{handlers: handlers}
+}
+
+func (h *multiHandler) WithGroup(name string) slog.Handler {
+	handlers := make([]slog.Handler, len(h.handlers))
+	for i, handler := range h.handlers {
+		handlers[i] = handler.WithGroup(name)
+	}
+	return &multiHandler{handlers: handlers}
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -487,6 +488,14 @@ func (h *Handler) compressResponse(ctx context.Context, span trace.Span, respBod
 		return respBody
 	}
 
+	// Create a child span for the compression operation
+	ctx, compressSpan := otel.Tracer("mcp-otel-proxy").Start(ctx, "mcp.response.compress",
+		trace.WithAttributes(
+			attribute.Int("mcp.response.original_bytes", len(respBody)),
+		),
+	)
+	defer compressSpan.End()
+
 	resp := &respParsed.Responses[0]
 	if len(resp.Result) == 0 {
 		return respBody
@@ -561,8 +570,13 @@ func (h *Handler) compressResponse(ctx context.Context, span trace.Span, respBod
 		return respBody
 	}
 
-	// Set compression telemetry attributes
+	// Set compression telemetry attributes on both parent and child spans
 	span.SetAttributes(
+		attribute.Bool("mcp.response.compressed", true),
+		attribute.Int("mcp.response.original_bytes", originalSize),
+		attribute.Int("mcp.response.compressed_bytes", len(newRespBody)),
+	)
+	compressSpan.SetAttributes(
 		attribute.Bool("mcp.response.compressed", true),
 		attribute.Int("mcp.response.original_bytes", originalSize),
 		attribute.Int("mcp.response.compressed_bytes", len(newRespBody)),

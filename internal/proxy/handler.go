@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -35,6 +36,7 @@ type Handler struct {
 	logger     *slog.Logger
 	serverAddr string
 	serverPort int
+	clientSessions sync.Map
 }
 
 // New creates a new proxy handler.
@@ -65,14 +67,17 @@ func New(cfg *config.Config, metrics *telemetry.Metrics, sessions *mcp.SessionSt
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Info("incoming request",
-		"method", r.Method,
-		"path", r.URL.Path,
-		"remote", r.RemoteAddr,
-		"accept", r.Header.Get("Accept"),
-		"content-type", r.Header.Get("Content-Type"),
-		"mcp-session-id", r.Header.Get("Mcp-Session-Id"),
-	)
+	// Log with session ID
+	h.logger.Info("incoming request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr, "accept", r.Header.Get("Accept"), "content-type", r.Header.Get("Content-Type"), "mcp-session-id", r.Header.Get("Mcp-Session-Id"))
+
+	// Inject cached session ID if client omits it
+	clientIP := strings.Split(r.RemoteAddr, ":")[0]
+	if r.Header.Get("Mcp-Session-Id") == "" {
+		if cachedID, ok := h.clientSessions.Load(clientIP); ok {
+			r.Header.Set("Mcp-Session-Id", cachedID.(string))
+			h.logger.Info("injected cached session ID", "client", clientIP, "session-id", cachedID)
+		}
+	}
 	start := time.Now()
 
 	// Read request body
@@ -179,6 +184,12 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 						respSessionID = respHeaders.Get("Mcp-Session-Id")
 					}
 					h.sessions.TrackInitialize(&respParsed.Responses[0], respSessionID)
+					// Cache session ID for clients that do not forward it
+					if respSessionID != "" {
+						clientIP := strings.Split(r.RemoteAddr, ":")[0]
+						h.clientSessions.Store(clientIP, respSessionID)
+						h.logger.Info("cached session ID for client", "client", clientIP, "session-id", respSessionID)
+					}
 				}
 				if h.config.CapturePayload && reqInfo.Method == "tools/call" {
 					telemetry.SetPayloadAttributes(span, string(req.Params), string(respParsed.Responses[0].Result))
@@ -225,6 +236,12 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 				respSessionID = respHeaders.Get("Mcp-Session-Id")
 			}
 			h.sessions.TrackInitialize(&respParsed.Responses[0], respSessionID)
+			// Cache session ID for clients that do not forward it
+			if respSessionID != "" {
+				clientIP := strings.Split(r.RemoteAddr, ":")[0]
+				h.clientSessions.Store(clientIP, respSessionID)
+				h.logger.Info("cached session ID for client", "client", clientIP, "session-id", respSessionID)
+			}
 		}
 
 		// Opt-in payload capture

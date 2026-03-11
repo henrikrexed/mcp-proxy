@@ -30,6 +30,7 @@ nav:
   - Telemetry Reference: telemetry-reference.md
   - Configuration: configuration.md
   - Deployment: deployment.md
+  - Response Compression: response-compression.md
   - Architecture: architecture.md
 
 markdown_extensions:

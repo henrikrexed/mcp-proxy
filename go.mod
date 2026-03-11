@@ -1,6 +1,6 @@
 module github.com/isitobservable/mcp-otel-proxy
 
-go 1.24.0
+go 1.26
 
 require (
 	go.opentelemetry.io/contrib/bridges/otelslog v0.15.0

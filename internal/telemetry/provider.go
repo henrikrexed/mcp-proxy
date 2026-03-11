@@ -15,8 +15,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	
+	
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
@@ -30,17 +30,8 @@ type Providers struct {
 }
 
 // InitOTel initializes all OTel providers (traces, metrics, logs) and returns them.
+// Uses OTel SDK auto-configuration via OTEL_EXPORTER_OTLP_ENDPOINT env var.
 func InitOTel(ctx context.Context, endpoint, serviceName string, isInsecure bool) (*Providers, error) {
-	dialOpts := []grpc.DialOption{}
-	if isInsecure {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	}
-
-	conn, err := grpc.NewClient(endpoint, dialOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC connection to %s: %w", endpoint, err)
-	}
-
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(serviceName),
@@ -50,8 +41,14 @@ func InitOTel(ctx context.Context, endpoint, serviceName string, isInsecure bool
 		return nil, fmt.Errorf("failed to create OTel resource: %w", err)
 	}
 
-	// Trace exporter + provider
-	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	// Trace exporter — let SDK read OTEL_EXPORTER_OTLP_ENDPOINT + OTEL_EXPORTER_OTLP_INSECURE
+	traceOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(endpoint),
+	}
+	if isInsecure {
+		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
+	}
+	traceExporter, err := otlptracegrpc.New(ctx, traceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
@@ -62,7 +59,13 @@ func InitOTel(ctx context.Context, endpoint, serviceName string, isInsecure bool
 	otel.SetTracerProvider(tp)
 
 	// Metric exporter + provider
-	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
+	metricOpts := []otlpmetricgrpc.Option{
+		otlpmetricgrpc.WithEndpoint(endpoint),
+	}
+	if isInsecure {
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
+	}
+	metricExporter, err := otlpmetricgrpc.New(ctx, metricOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
 	}
@@ -73,7 +76,13 @@ func InitOTel(ctx context.Context, endpoint, serviceName string, isInsecure bool
 	otel.SetMeterProvider(mp)
 
 	// Log exporter + provider
-	logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
+	logOpts := []otlploggrpc.Option{
+		otlploggrpc.WithEndpoint(endpoint),
+	}
+	if isInsecure {
+		logOpts = append(logOpts, otlploggrpc.WithInsecure())
+	}
+	logExporter, err := otlploggrpc.New(ctx, logOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log exporter: %w", err)
 	}

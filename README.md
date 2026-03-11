@@ -62,6 +62,9 @@ The SkillPack defines:
 | `OTEL_SERVICE_NAME` | Service name for telemetry | `mcp-otel-proxy` |
 | `LOG_LEVEL` | Log level (debug/info/warn/error) | `info` |
 | `CAPTURE_PAYLOAD` | Capture request/response bodies | `false` |
+| `COMPRESS_RESPONSES` | Convert JSON tool responses to markdown tables (reduces LLM token usage) | `false` |
+| `CONTEXT_PROPAGATION` | Enable trace context propagation via params._meta | `true` |
+| `SESSION_TTL` | Session eviction TTL in seconds | `3600` |
 
 ## Documentation
 

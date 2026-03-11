@@ -361,6 +361,8 @@ func (h *Handler) doUpstreamRequest(ctx context.Context, originalReq *http.Reque
 		}
 	}
 	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	// Ensure upstream always gets Accept: text/event-stream (supergateway requires it)
+	req.Header.Set("Accept", "text/event-stream, application/json")
 
 	resp, err := h.client.Do(req)
 	if err != nil {
@@ -406,6 +408,8 @@ func (h *Handler) doUpstreamStreamingRequest(ctx context.Context, w http.Respons
 		}
 	}
 	req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	// Ensure upstream always gets Accept: text/event-stream (supergateway requires it)
+	req.Header.Set("Accept", "text/event-stream, application/json")
 
 	resp, err := h.client.Do(req)
 	if err != nil {

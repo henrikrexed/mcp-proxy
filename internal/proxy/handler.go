@@ -71,6 +71,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"remote", r.RemoteAddr,
 		"accept", r.Header.Get("Accept"),
 		"content-type", r.Header.Get("Content-Type"),
+		"mcp-session-id", r.Header.Get("Mcp-Session-Id"),
 	)
 	start := time.Now()
 

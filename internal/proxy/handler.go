@@ -107,6 +107,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rewrite protocol version in initialize requests to ensure compatibility
+	// with older MCP servers (e.g., supergateway) that don't support 2025-11-25
+	if !parsed.IsBatch && len(parsed.Requests) > 0 && parsed.Requests[0].Method == "initialize" {
+		reqBody = rewriteProtocolVersion(reqBody, h.logger)
+	}
+
 	if parsed.IsBatch {
 		h.handleBatch(w, r, reqBody, parsed, start)
 	} else {
@@ -625,4 +631,42 @@ func (h *Handler) compressResponse(ctx context.Context, span trace.Span, respBod
 	)
 
 	return newRespBody
+}
+
+// rewriteProtocolVersion rewrites the protocolVersion in an initialize request
+// to ensure compatibility with older MCP servers. Maps newer versions to 2025-06-18.
+func rewriteProtocolVersion(body []byte, logger *slog.Logger) []byte {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return body
+	}
+	params, ok := raw["params"].(map[string]interface{})
+	if !ok {
+		return body
+	}
+	version, ok := params["protocolVersion"].(string)
+	if !ok {
+		return body
+	}
+
+	// Only rewrite if using a version newer than what older servers support
+	supportedVersions := map[string]bool{
+		"2024-10-07": true,
+		"2024-11-05": true,
+		"2025-03-26": true,
+		"2025-06-18": true,
+	}
+	if supportedVersions[version] {
+		return body // Already compatible
+	}
+
+	logger.Info("rewriting protocol version for compatibility", "from", version, "to", "2025-06-18")
+	params["protocolVersion"] = "2025-06-18"
+	raw["params"] = params
+	rewritten, err := json.Marshal(raw)
+	if err != nil {
+		logger.Warn("failed to marshal rewritten initialize request", "error", err)
+		return body
+	}
+	return rewritten
 }

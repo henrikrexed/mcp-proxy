@@ -114,6 +114,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// with older MCP servers (e.g., supergateway) that don't support 2025-11-25
 	if !parsed.IsBatch && len(parsed.Requests) > 0 && parsed.Requests[0].Method == "initialize" {
 		reqBody = rewriteProtocolVersion(reqBody, h.logger)
+		// initialize creates a NEW session -- never send a stale session ID
+		r.Header.Del("Mcp-Session-Id")
 	}
 
 	if parsed.IsBatch {

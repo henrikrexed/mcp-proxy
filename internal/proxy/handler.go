@@ -38,6 +38,7 @@ type Handler struct {
 	serverAddr string
 	serverPort int
 	clientSessions sync.Map
+	reinit         *reinitializer
 }
 
 // New creates a new proxy handler.
@@ -55,15 +56,17 @@ func New(cfg *config.Config, metrics *telemetry.Metrics, sessions *mcp.SessionSt
 		port = 443
 	}
 
+	httpClient := &http.Client{Timeout: 5 * time.Minute}
 	return &Handler{
 		upstream:   u,
-		client:     &http.Client{Timeout: 5 * time.Minute},
+		client:     httpClient,
 		config:     cfg,
 		metrics:    metrics,
 		sessions:   sessions,
 		logger:     logger,
 		serverAddr: u.Hostname(),
 		serverPort: port,
+		reinit:     newReinitializer(u.String(), httpClient, logger),
 	}, nil
 }
 
@@ -167,9 +170,29 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 	var statusCode int
 
 	if acceptsSSE {
-		// StreamableHTTP: stream SSE response directly to client while buffering for telemetry
+		// Use buffered upstream request so we can reinit on 400 before writing to client
 		var sseErr error
-		respBody, respHeaders, _, sseErr = h.doUpstreamStreamingRequest(ctx, w, r, bodyToSend)
+		respBody, respHeaders, statusCode, sseErr = h.doUpstreamRequest(ctx, r, bodyToSend)
+		// If dead session, reinit and retry
+		if sseErr == nil && shouldReinit(statusCode, reqInfo.Method) {
+			h.logger.Warn("upstream SSE returned error, attempting reinit",
+				"status", statusCode, "mcp.method.name", reqInfo.Method)
+			span.SetAttributes(attribute.Bool("mcp.reinit.attempted", true))
+			retryBody, retryHeaders, retryStatus, retryErr := h.reinit.reinitAndRetry(r, bodyToSend, r.URL.Path)
+			if retryErr == nil {
+				span.SetAttributes(attribute.Bool("mcp.reinit.success", true))
+				respBody = retryBody
+				respHeaders = retryHeaders
+				statusCode = retryStatus
+				if newSID := h.reinit.getSessionID(); newSID != "" {
+					clientIP := strings.Split(r.RemoteAddr, ":")[0]
+					h.clientSessions.Store(clientIP, newSID)
+				}
+			} else {
+				h.logger.Error("SSE reinit failed", "error", retryErr)
+				span.SetAttributes(attribute.Bool("mcp.reinit.success", false))
+			}
+		}
 		upstreamDuration := time.Since(upstreamStart)
 		h.metrics.UpstreamLatency.Record(ctx, upstreamDuration.Seconds(), telemetry.MethodToolAttrs(reqInfo.Method, reqInfo.ToolName))
 		if sseErr != nil {
@@ -192,7 +215,7 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 						respSessionID = respHeaders.Get("Mcp-Session-Id")
 					}
 					h.sessions.TrackInitialize(&respParsed.Responses[0], respSessionID)
-					// Cache session ID for clients that do not forward it
+					h.reinit.cacheInitRequest(reqBody, respSessionID)
 					if respSessionID != "" {
 						clientIP := strings.Split(r.RemoteAddr, ":")[0]
 						h.clientSessions.Store(clientIP, respSessionID)
@@ -209,6 +232,12 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		h.metrics.RequestDuration.Record(ctx, duration.Seconds(),
 			telemetry.MethodToolErrorAttrs(reqInfo.Method, reqInfo.ToolName, respInfo))
 		telemetry.EndMCPSpan(span, respInfo)
+		// Write buffered response to client
+		copyHeaders(w.Header(), respHeaders)
+		w.WriteHeader(statusCode)
+		if _, wErr := w.Write(respBody); wErr != nil {
+			h.logger.ErrorContext(ctx, "failed to write SSE response to client", "error", wErr)
+		}
 		return
 	}
 
@@ -228,6 +257,29 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 		return
 	}
 
+	// Retry with reinit if upstream returned an error indicating dead session
+	if shouldReinit(statusCode, reqInfo.Method) {
+		h.logger.Warn("upstream returned error, attempting reinit",
+			"status", statusCode, "mcp.method.name", reqInfo.Method)
+		span.SetAttributes(attribute.Bool("mcp.reinit.attempted", true))
+		retryBody, retryHeaders, retryStatus, retryErr := h.reinit.reinitAndRetry(r, bodyToSend, r.URL.Path)
+		if retryErr != nil {
+			h.logger.Error("reinit failed, returning original error response", "error", retryErr)
+			span.SetAttributes(attribute.Bool("mcp.reinit.success", false))
+		} else {
+			h.logger.Info("reinit succeeded, using retried response", "new-status", retryStatus)
+			span.SetAttributes(attribute.Bool("mcp.reinit.success", true))
+			respBody = retryBody
+			respHeaders = retryHeaders
+			statusCode = retryStatus
+			if newSID := h.reinit.getSessionID(); newSID != "" {
+				clientIP := strings.Split(r.RemoteAddr, ":")[0]
+				h.clientSessions.Store(clientIP, newSID)
+			}
+			upstreamDuration = time.Since(upstreamStart)
+		}
+	}
+
 	// Record upstream latency
 	h.metrics.UpstreamLatency.Record(ctx, upstreamDuration.Seconds(), telemetry.MethodToolAttrs(reqInfo.Method, reqInfo.ToolName))
 
@@ -244,7 +296,7 @@ func (h *Handler) handleSingle(w http.ResponseWriter, r *http.Request, reqBody [
 				respSessionID = respHeaders.Get("Mcp-Session-Id")
 			}
 			h.sessions.TrackInitialize(&respParsed.Responses[0], respSessionID)
-			// Cache session ID for clients that do not forward it
+			h.reinit.cacheInitRequest(reqBody, respSessionID)
 			if respSessionID != "" {
 				clientIP := strings.Split(r.RemoteAddr, ":")[0]
 				h.clientSessions.Store(clientIP, respSessionID)

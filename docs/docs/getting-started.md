@@ -24,7 +24,7 @@ Point your MCP client at `http://localhost:8080` instead of the MCP server direc
 ## Option 2: Kubernetes (Helm)
 
 ```bash
-helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.1.0 \
+helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.0.24 \
   --set mcpServer.image=your-org/your-mcp-server:latest \
   --set mcpServer.port=3000 \
   --set otel.endpoint=otel-collector.observability.svc.cluster.local:4317 \

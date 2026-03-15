@@ -37,7 +37,7 @@ func main() {
 		logLevel = slog.LevelInfo
 	}
 
-	fmt.Fprintf(os.Stdout, "mcp-otel-proxy starting (pre-init) upstream=%s port=%s otel=%s\n", cfg.UpstreamURL, cfg.ProxyPort, cfg.OTELEndpoint)
+	_, _ = fmt.Fprintf(os.Stdout, "mcp-otel-proxy starting (pre-init) upstream=%s port=%s otel=%s\n", cfg.UpstreamURL, cfg.ProxyPort, cfg.OTELEndpoint)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

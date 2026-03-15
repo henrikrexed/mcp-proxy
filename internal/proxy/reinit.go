@@ -135,10 +135,3 @@ func (r *reinitializer) getSessionID() string {
 	return r.lastSessionID
 }
 
-func (r *reinitializer) setRequestSessionID(reqBody []byte, _ string) []byte {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(reqBody, &raw); err != nil {
-		return reqBody
-	}
-	return reqBody
-}

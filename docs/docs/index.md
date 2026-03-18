@@ -51,7 +51,7 @@ docker run -d \
 Or with Helm:
 
 ```bash
-helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.0.24 \
+helm install my-mcp oci://ghcr.io/henrikrexed/charts/mcp-otel-proxy --version 0.0.24 \
   --set mcpServer.image=your-mcp-server:latest \
   --set otel.endpoint=otel-collector:4317
 ```

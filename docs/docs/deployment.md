@@ -7,7 +7,7 @@ The recommended deployment method. The Helm chart deploys your MCP server with t
 ### Install
 
 ```bash
-helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.0.24 \
+helm install my-mcp oci://ghcr.io/henrikrexed/charts/mcp-otel-proxy --version 0.0.24 \
   --set mcpServer.image=your-org/your-mcp-server:latest \
   --set mcpServer.port=3000 \
   --set otel.endpoint=otel-collector.observability.svc.cluster.local:4317 \
@@ -19,7 +19,7 @@ helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.0.24 \
 Expose the MCP server externally via Gateway API:
 
 ```bash
-helm install my-mcp oci://ghcr.io/henrikrexed/mcp-otel-proxy --version 0.0.24 \
+helm install my-mcp oci://ghcr.io/henrikrexed/charts/mcp-otel-proxy --version 0.0.24 \
   --set mcpServer.image=your-org/your-mcp-server:latest \
   --set gateway.enabled=true \
   --set gateway.name=my-gateway \
